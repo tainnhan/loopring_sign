@@ -2,8 +2,8 @@ use num_bigint::BigUint;
 use std::{ops::Add, str::FromStr};
 
 lazy_static! {
-    // This number is the base field of JubJub(elliptic cruve) and refers to the finite field over which the curve is defined
-    //
+    // This number is the base field of JubJub (elliptic cruve) and refers to the finite field over which the curve is defined.
+    // The operation
     //
     pub static ref SNARK_SCALAR_FIELD: BigUint = BigUint::from_str(
         "21888242871839275222246405745257275088548364400416034343698204186575808495617"
