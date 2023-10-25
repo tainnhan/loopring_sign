@@ -80,10 +80,164 @@ impl Div for FQ {
     fn div(self, rhs: Self) -> Self::Output {
         let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
         let multiplicative_inverse = rhs.n.modpow(&fermat_exponent, &rhs.m);
-        let result = self.n * multiplicative_inverse;
+        let result = self.n * multiplicative_inverse % self.m;
         FQ {
             n: result,
             m: rhs.m,
         }
+    }
+}
+
+impl Clone for FQ {
+    fn clone(&self) -> Self {
+        Self {
+            n: self.n.clone(),
+            m: self.m.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        *self = source.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn field_addition() {
+        let n1 = BigInt::from_str(
+            "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+        )
+        .unwrap();
+        let n2 = BigInt::from_str(
+            "64019726205844806607227168444173457603185468776494125031546307012808629654",
+        )
+        .unwrap();
+
+        let field_1 = FQ::new(n1, None);
+        let field_2 = FQ::new(n2, None);
+        let result = field_1.add(field_2);
+        let real_result = BigInt::from_str(
+            "17039040678035688098169083453273431042237471845415528443436549201766984616476",
+        )
+        .unwrap();
+        assert_eq!(result.n, real_result);
+    }
+    #[test]
+    fn field_subraction() {
+        let n1 = BigInt::from_str(
+            "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+        )
+        .unwrap();
+        let n2 = BigInt::from_str(
+            "64019726205844806607227168444173457603185468776494125031546307012808629654",
+        )
+        .unwrap();
+
+        let field_1 = FQ::new(n1, None);
+        let field_2 = FQ::new(n2, None);
+
+        let result_1 = field_1.clone().sub(field_2.clone());
+        let result_2 = field_2.clone().sub(field_1.clone());
+
+        assert_eq!(
+            result_1.n,
+            BigInt::from_str(
+                "16911001225623998484954629116385084127031100907862540193373456587741367357168",
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            result_2.n,
+            BigInt::from_str(
+                "4977241646215276737291776628872190961517263492553494150324747598834441138449",
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn field_multiplication() {
+        let n1 = BigInt::from_str(
+            "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+        )
+        .unwrap();
+        let n2 = BigInt::from_str(
+            "64019726205844806607227168444173457603185468776494125031546307012808629654",
+        )
+        .unwrap();
+        let n3 = BigInt::from_str(
+            "8023312754331632317345164874475855606161388395970421403351236980717209379200",
+        )
+        .unwrap();
+
+        let field_1 = FQ::new(n1, None);
+        let field_2 = FQ::new(n2, None);
+        let field_3 = FQ::new(n3, None);
+
+        let result_1 = field_1.clone().mul(field_2.clone()).mul(field_3.clone());
+        let result_2 = field_1.clone().mul(field_3.clone());
+
+        assert_eq!(
+            result_1.n,
+            BigInt::from_str(
+                "18182554182870232023808950424673874478127155834326600840622566402557800401919"
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            result_2.n,
+            BigInt::from_str(
+                "7078307911818432186422689430568175567157289995259698798344014234848622444761"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn field_division() {
+        let n1 = BigInt::from_str(
+            "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+        )
+        .unwrap();
+        let n2 = BigInt::from_str(
+            "64019726205844806607227168444173457603185468776494125031546307012808629654",
+        )
+        .unwrap();
+        let n3 = BigInt::from_str(
+            "8023312754331632317345164874475855606161388395970421403351236980717209379200",
+        )
+        .unwrap();
+
+        let field_1 = FQ::new(n1, None);
+        let field_2 = FQ::new(n2, None);
+        let field_3 = FQ::new(n3, None);
+
+        let result1 = field_1.clone().div(field_2.clone());
+        let result2 = field_2.clone().div(field_1.clone());
+        let result3 = field_3.clone().div(field_2.clone()).div(field_1.clone());
+
+        assert_eq!(
+            result1.n,
+            BigInt::from_str(
+                "9916021784047275937858878444139751840705039734455470105457699170412095765019"
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            result2.n,
+            BigInt::from_str(
+                "4046019741176394233170180050870245201959085245483667903544123842500354019676"
+            )
+            .unwrap()
+        );
+
+        assert_eq!(result3.n, BigInt::from_str("1").unwrap());
     }
 }
