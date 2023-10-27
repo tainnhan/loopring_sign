@@ -15,6 +15,22 @@ use blake2b_simd::{Hash, Params};
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, One, Zero};
 
+trait AsBytes {
+    fn as_bytes(&self) -> Vec<u8>;
+}
+
+impl AsBytes for BigInt {
+    fn as_bytes(&self) -> Vec<u8> {
+        self.to_bytes_le().1
+    }
+}
+
+impl AsBytes for &str {
+    fn as_bytes(&self) -> Vec<u8> {
+        str::as_bytes(self).to_vec()
+    }
+}
+
 //
 // describe the general paramters of poseidon
 //
@@ -118,6 +134,7 @@ impl Poseidon {
 
         // into_iter consumes the value of the vector and
         // therefore the inputs iter cannot be used anymore
+
         for (i, input_value) in inputs.into_iter().enumerate() {
             state[i] = input_value;
         }
@@ -129,11 +146,11 @@ impl Poseidon {
 
     pub fn poseidon_constants(p: &BigInt, seed: &str, n: usize) -> Vec<BigInt> {
         let mut result: Vec<BigInt> = Vec::with_capacity(n);
-        let mut current_seed: BigInt = Self::calculate_blake2b_str(seed);
+        let mut current_seed = Self::calculate_blake2b::<&str>(&seed);
         result.push(current_seed.clone() % p);
 
         for _ in 1..n {
-            current_seed = Self::calculate_blake2b(&current_seed);
+            current_seed = Self::calculate_blake2b::<BigInt>(&current_seed);
             result.push(current_seed.clone() % p);
         }
         result
@@ -154,25 +171,13 @@ impl Poseidon {
         Vec::new()
     }
 
-    fn calculate_blake2b(seed: &BigInt) -> BigInt {
+    fn calculate_blake2b<T: AsBytes>(seed: &T) -> BigInt {
         let hash = Params::new()
             .hash_length(32)
             .key(b"")
             .personal(b"")
             .to_state()
-            .update(&seed.to_bytes_le().1)
-            .finalize();
-        let result = BigInt::from_bytes_le(num_bigint::Sign::Plus, hash.as_bytes());
-        result
-    }
-
-    fn calculate_blake2b_str(seed: &str) -> BigInt {
-        let hash = Params::new()
-            .hash_length(32)
-            .key(b"")
-            .personal(b"")
-            .to_state()
-            .update(seed.as_bytes())
+            .update(&seed.as_bytes())
             .finalize();
         let result = BigInt::from_bytes_le(num_bigint::Sign::Plus, hash.as_bytes());
         result
@@ -205,9 +210,7 @@ mod tests {
     }
     #[test]
     fn test_blake2bhash_str() {
-        let seed = String::from("poseidon_matrix_0000");
-
-        let hash = Poseidon::calculate_blake2b_str("poseidon_matrix_0000");
+        let hash = Poseidon::calculate_blake2b(&"poseidon_matrix_0000");
         assert_eq!(
             hash,
             BigInt::from_str(
