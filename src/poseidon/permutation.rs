@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 /*
 Implements the Poseidon permutation:
 
@@ -11,9 +9,9 @@ Starkad and Poseidon: New Hash Functions for Zero Knowledge Proof Systems
  - https://github.com/Loopring/hello_loopring/blob/loopring-v3/sdk/ethsnarks/poseidon/permutation.py
  */
 use crate::util::errors::PoseidonError;
-use blake2b_simd::{Hash, Params};
+use blake2b_simd::Params;
 use num_bigint::BigInt;
-use num_traits::{FromPrimitive, One, Zero};
+use num_traits::{One, Zero};
 
 trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
@@ -42,7 +40,7 @@ pub struct Poseidon {
     seed: String,
     e: BigInt,
     constants_c: Option<Vec<BigInt>>,
-    constants_m: Option<Vec<BigInt>>,
+    constants_m: Option<Vec<Vec<BigInt>>>,
     securiy_target: usize,
 }
 
@@ -58,7 +56,7 @@ impl Poseidon {
         seed: String,
         e: BigInt,
         mut constants_c: Option<Vec<BigInt>>,
-        mut constants_m: Option<Vec<BigInt>>,
+        mut constants_m: Option<Vec<Vec<BigInt>>>,
         securiy_target: usize,
     ) -> Self {
         constants_c.get_or_insert_with(|| {
@@ -138,15 +136,22 @@ impl Poseidon {
         for (i, input_value) in inputs.into_iter().enumerate() {
             state[i] = input_value;
         }
-
         // We need to calculate Constant_c and Constants_m now
+        if let Some(ref constants) = self.constants_c {
+            for (i, constant_c) in constants.into_iter().enumerate() {
+                for state_item in &mut state {
+                    *state_item += constant_c;
+                }
+                state = self.poseidon_sbox(state, i);
+            }
+        }
 
         Ok(BigInt::one())
     }
 
     pub fn poseidon_constants(p: &BigInt, seed: &str, n: usize) -> Vec<BigInt> {
         let mut result: Vec<BigInt> = Vec::with_capacity(n);
-        let mut current_seed = Self::calculate_blake2b::<&str>(&seed);
+        let mut current_seed: BigInt = Self::calculate_blake2b::<&str>(&seed);
         result.push(current_seed.clone() % p);
 
         for _ in 1..n {
@@ -167,7 +172,34 @@ impl Poseidon {
         Also:
          - https://en.wikipedia.org/wiki/Cauchy_matrix
     */
-    pub fn poseidon_matrix() -> Vec<BigInt> {
+    pub fn poseidon_matrix() -> Vec<Vec<BigInt>> {
+        Vec::new()
+    }
+
+    /*
+    iacr.org/2019/458 § 2.2 The Hades Strategy (pg 6)
+
+    In more details, assume R_F = 2 · R_f is an even number. Then
+    - the first R_f rounds have a full S-Box layer,
+    - the middle R_P rounds have a partial S-Box layer (i.e., 1 S-Box layer),
+    - the last R_f rounds have a full S-Box layer
+    */
+
+    fn poseidon_sbox(&self, mut state: Vec<BigInt>, i: usize) -> Vec<BigInt> {
+        let half_f = self.n_rounds_f / 2;
+
+        if i < half_f || i >= half_f + self.n_rounds_p {
+            for state_item in &mut state {
+                let new_state = state_item.modpow(&self.e, &self.p);
+                *state_item = new_state;
+            }
+        } else {
+            state[0] = state[0].modpow(&self.e, &self.p);
+        }
+        state
+    }
+
+    fn poseidon_mix(&self, mut state: Vec<BigInt>) -> Vec<BigInt> {
         Vec::new()
     }
 
