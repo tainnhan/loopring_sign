@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 /*
 Implements the Poseidon permutation:
 
@@ -13,7 +11,7 @@ Starkad and Poseidon: New Hash Functions for Zero Knowledge Proof Systems
 use crate::util::errors::PoseidonError;
 use blake2b_simd::Params;
 use num_bigint::BigInt;
-use num_traits::{Euclid, One, Zero};
+use num_traits::{Euclid, Zero};
 
 trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
@@ -110,20 +108,14 @@ impl Poseidon {
       to form a sponge construct.
     */
 
-    pub fn calculate_poseidon(
-        &self,
-        inputs: Vec<BigInt>,
-        chained: bool,
-        trace: bool,
-    ) -> Result<BigInt, PoseidonError> {
+    pub fn calculate_poseidon(&self, inputs: Vec<BigInt>) -> Result<BigInt, PoseidonError> {
         if inputs.is_empty() {
             return Err(PoseidonError::EmptyInputError);
         }
-        // Don't allow inputs to exceed the rate, unless in chained mode
-        if !chained && inputs.len() >= self.t {
+        // Don't allow inputs to exceed the rate
+        if inputs.len() >= self.t {
             return Err(PoseidonError::InputsExceedRate);
         }
-
         // The state can be thought of as an array or a matrix of numbers.
         // The "width" of the state refers to how many individual elements are in this set.
         // Each element is a piece of data, often fixed-size, and typically these elements are
@@ -133,23 +125,19 @@ impl Poseidon {
 
         let mut state: Vec<BigInt> = vec![BigInt::zero(); self.t];
 
-        // into_iter consumes the value of the vector and
-        // therefore the inputs iter cannot be used anymore
-
         for (i, input_value) in inputs.into_iter().enumerate() {
             state[i] = input_value;
         }
-        // We need to calculate Constant_c and Constants_m now
         if let Some(ref constants) = self.constants_c {
             for (i, constant_c) in constants.into_iter().enumerate() {
                 for state_item in &mut state {
                     *state_item += constant_c;
                 }
                 state = self.poseidon_sbox(state, i);
+                state = self.poseidon_mix(state);
             }
         }
-
-        Ok(BigInt::one())
+        Ok(state[0].clone())
     }
 
     pub fn poseidon_constants(p: &BigInt, seed: &str, n: usize) -> Vec<BigInt> {
@@ -180,11 +168,6 @@ impl Poseidon {
         let c: Vec<BigInt> = Self::poseidon_constants(&p, &seed, t * 2);
         let mut matrix: Vec<Vec<BigInt>> = Vec::new();
 
-        // each element is the modular inverse since cuachy matri is (1/xi-xj)
-        // t = 9 -> Means we are creating a 9x9 matrix
-        //  return [[pow((c[i] - c[t+j]) % p, p - 2, p) for j in range(t)]
-        //         for i in range(t)]
-        // c[0] - c[1]
         for i in 0..*t {
             let mut row: Vec<BigInt> = Vec::new();
             for j in 0..*t {
@@ -221,8 +204,25 @@ impl Poseidon {
         state
     }
 
-    fn poseidon_mix(&self, mut state: Vec<BigInt>) -> Vec<BigInt> {
-        Vec::new()
+    fn poseidon_mix(&self, state: Vec<BigInt>) -> Vec<BigInt> {
+        /*
+        The mixing layer is a matrix vector product of the state with the mixing matrix
+          - https://mathinsight.org/matrix_vector_multiplication
+        */
+        //return [ sum([M[i][j] * _ for j, _ in enumerate(state)]) % p
+        // for i in range(len(M)) ]
+
+        let mut new_state: Vec<BigInt> = Vec::new();
+        if let Some(constant_m) = &self.constants_m {
+            for i in 0..constant_m.len() {
+                let mut sum = BigInt::zero();
+                for j in 0..state.len() {
+                    sum += &constant_m[i][j] * &state[j]
+                }
+                new_state.push(sum.rem_euclid(&self.p))
+            }
+        }
+        new_state
     }
 
     fn calculate_blake2b<T: AsBytes>(seed: &T) -> BigInt {
@@ -241,6 +241,8 @@ impl Poseidon {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use num_traits::One;
 
     use crate::poseidon::field::SNARK_SCALAR_FIELD;
 
@@ -278,7 +280,7 @@ mod tests {
         let p = SNARK_SCALAR_FIELD.clone();
         let seed = String::from("poseidon_constants");
         let n = 65;
-        let constants_c = Poseidon::poseidon_constants(&p, &seed, 65);
+        let constants_c = Poseidon::poseidon_constants(&p, &seed, n);
 
         assert_eq!(
             constants_c[0],
@@ -357,6 +359,85 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_poseidon_1() {
+        let p = SNARK_SCALAR_FIELD.clone();
+        let max_input = 8;
+        let seed = String::from("poseidon");
+        let e = BigInt::from_str("5").unwrap();
+        let poseidon = Poseidon::new(p, max_input + 1, 6, 53, seed, e, None, None, 128);
+        let inputs = vec![BigInt::from_str("1").unwrap()];
+        let state = poseidon.calculate_poseidon(inputs);
+        let result = match state {
+            Ok(value) => format!("{}", value),
+            Err(e) => {
+                format!("{}", e)
+            }
+        };
+        assert_eq!(
+            BigInt::from_str(&result).unwrap(),
+            BigInt::from_str(
+                "20640057815290657586474256351705900781103272844170318852926520138679251832017"
+            )
+            .unwrap()
+        )
+    }
+    #[test]
+    fn test_poseidon_2() {
+        let p = SNARK_SCALAR_FIELD.clone();
+        let max_input = 8;
+        let seed = String::from("poseidon");
+        let e = BigInt::from_str("5").unwrap();
+        let poseidon = Poseidon::new(p, max_input + 1, 6, 53, seed, e, None, None, 128);
+        let inputs = vec![BigInt::one(), BigInt::from(2)];
+        let state = poseidon.calculate_poseidon(inputs);
+        let result = match state {
+            Ok(value) => format!("{}", value),
+            Err(e) => {
+                format!("{}", e)
+            }
+        };
+        assert_eq!(
+            BigInt::from_str(&result).unwrap(),
+            BigInt::from_str(
+                "9251914430137119038619835991672259215400712688203929648293348181354900386736"
+            )
+            .unwrap()
+        )
+    }
+    #[test]
+    fn test_poseidon_3() {
+        let p = SNARK_SCALAR_FIELD.clone();
+        let max_input = 8;
+        let seed = String::from("poseidon");
+        let e = BigInt::from_str("5").unwrap();
+        let poseidon = Poseidon::new(p, max_input + 1, 6, 53, seed, e, None, None, 128);
+        let inputs = vec![
+            BigInt::one(),
+            BigInt::from(2),
+            BigInt::from(3),
+            BigInt::from(4),
+            BigInt::from(5),
+            BigInt::from(6),
+            BigInt::from(7),
+            BigInt::from(8),
+        ];
+        let state = poseidon.calculate_poseidon(inputs);
+        let result = match state {
+            Ok(value) => format!("{}", value),
+            Err(e) => {
+                format!("{}", e)
+            }
+        };
+        assert_eq!(
+            BigInt::from_str(&result).unwrap(),
+            BigInt::from_str(
+                "1792233229836714442925799757877868602259716425270865187624398529027734741166"
+            )
+            .unwrap()
+        )
     }
 }
 // #[cfg(test)]
