@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 /*
 Implements the Poseidon permutation:
 
@@ -11,7 +13,7 @@ Starkad and Poseidon: New Hash Functions for Zero Knowledge Proof Systems
 use crate::util::errors::PoseidonError;
 use blake2b_simd::Params;
 use num_bigint::BigInt;
-use num_traits::{One, Zero};
+use num_traits::{Euclid, One, Zero};
 
 trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
@@ -66,7 +68,8 @@ impl Poseidon {
                 &n_rounds_f + &n_rounds_p,
             )
         });
-        constants_m.get_or_insert_with(|| Poseidon::poseidon_matrix());
+        constants_m
+            .get_or_insert_with(|| Self::poseidon_matrix(&p, &format!("{}_matrix_0000", seed), &t));
         Poseidon {
             p,
             t,
@@ -172,8 +175,27 @@ impl Poseidon {
         Also:
          - https://en.wikipedia.org/wiki/Cauchy_matrix
     */
-    pub fn poseidon_matrix() -> Vec<Vec<BigInt>> {
-        Vec::new()
+
+    pub fn poseidon_matrix(p: &BigInt, seed: &str, t: &usize) -> Vec<Vec<BigInt>> {
+        let c: Vec<BigInt> = Self::poseidon_constants(&p, &seed, t * 2);
+        let mut matrix: Vec<Vec<BigInt>> = Vec::new();
+
+        // each element is the modular inverse since cuachy matri is (1/xi-xj)
+        // t = 9 -> Means we are creating a 9x9 matrix
+        //  return [[pow((c[i] - c[t+j]) % p, p - 2, p) for j in range(t)]
+        //         for i in range(t)]
+        // c[0] - c[1]
+        for i in 0..*t {
+            let mut row: Vec<BigInt> = Vec::new();
+            for j in 0..*t {
+                let base = (&c[i] - &c[t + j]).rem_euclid(p);
+                let exponent = p - 2;
+                let modular_inverse = base.modpow(&exponent, p);
+                row.push(modular_inverse);
+            }
+            matrix.push(row);
+        }
+        matrix
     }
 
     /*
@@ -290,6 +312,48 @@ mod tests {
             constants_c[64],
             BigInt::from_str(
                 "10635360132728137321700090133109897687122647659471659996419791842933639708516"
+            )
+            .unwrap()
+        );
+    }
+    #[test]
+    fn test_poseidon_matrix() {
+        let seed = "poseidon_matrix_0000";
+        let p = SNARK_SCALAR_FIELD.clone();
+        let t = 9;
+        let constant_m = Poseidon::poseidon_matrix(&p, seed, &t);
+        assert_eq!(
+            constant_m[0][0],
+            BigInt::from_str(
+                "16378664841697311562845443097199265623838619398287411428110917414833007677155"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            constant_m[0][1],
+            BigInt::from_str(
+                "12968540216479938138647596899147650021419273189336843725176422194136033835172"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            constant_m[0][2],
+            BigInt::from_str(
+                "3636162562566338420490575570584278737093584021456168183289112789616069756675"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            constant_m[1][3],
+            BigInt::from_str(
+                "8642889650254799419576843603477253661899356105675006557919250564400804756641"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            constant_m[8][8],
+            BigInt::from_str(
+                "11398590172899810645820530606484864595574598270604175688862890426075002823331"
             )
             .unwrap()
         );

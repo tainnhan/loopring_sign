@@ -79,7 +79,7 @@ impl Div for FQ {
 
     fn div(self, rhs: Self) -> Self::Output {
         let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
-        let multiplicative_inverse = rhs.n.modpow(&fermat_exponent, &rhs.m);
+        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
         let result = self.n * multiplicative_inverse % self.m;
         FQ {
             n: result,
