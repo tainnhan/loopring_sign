@@ -37,11 +37,11 @@ pub struct Poseidon {
     t: usize,
     n_rounds_f: usize,
     n_rounds_p: usize,
-    seed: String,
+    _seed: String,
     e: BigInt,
     constants_c: Option<Vec<BigInt>>,
     constants_m: Option<Vec<Vec<BigInt>>>,
-    securiy_target: usize,
+    _security_target: usize,
 }
 
 // The 'state' is the internal state that goes thorugh each
@@ -57,7 +57,7 @@ impl Poseidon {
         e: BigInt,
         mut constants_c: Option<Vec<BigInt>>,
         mut constants_m: Option<Vec<Vec<BigInt>>>,
-        securiy_target: usize,
+        security_target: usize,
     ) -> Self {
         constants_c.get_or_insert_with(|| {
             Poseidon::poseidon_constants(
@@ -73,11 +73,11 @@ impl Poseidon {
             t,
             n_rounds_f,
             n_rounds_p,
-            seed,
+            _seed: seed,
             e,
             constants_c,
             constants_m,
-            securiy_target,
+            _security_target: security_target,
         }
     }
     // poseidon
@@ -209,8 +209,6 @@ impl Poseidon {
         The mixing layer is a matrix vector product of the state with the mixing matrix
           - https://mathinsight.org/matrix_vector_multiplication
         */
-        //return [ sum([M[i][j] * _ for j, _ in enumerate(state)]) % p
-        // for i in range(len(M)) ]
 
         let mut new_state: Vec<BigInt> = Vec::new();
         if let Some(constant_m) = &self.constants_m {
@@ -440,9 +438,3 @@ mod tests {
         )
     }
 }
-// #[cfg(test)]
-// mod tests {
-
-//     use super::*;
-
-//     #[test]
