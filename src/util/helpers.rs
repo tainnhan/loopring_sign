@@ -1,10 +1,23 @@
 use indexmap::IndexMap;
+use num_bigint::BigInt;
+use num_bigint::Sign;
 use percent_encoding::{percent_encode, AsciiSet, CONTROLS, NON_ALPHANUMERIC};
 use serde_json;
+use sha2::{Digest, Sha256};
 use url::form_urlencoded;
+
+use crate::poseidon::field::SNARK_SCALAR_FIELD;
+
 pub struct Helpers;
 
 impl Helpers {
+    pub fn sha256_snark(signature_base: &str) -> BigInt {
+        let mut hasher = Sha256::new();
+        hasher.update(signature_base);
+        let hash = BigInt::from_bytes_be(Sign::Plus, &hasher.finalize()[..]);
+        hash % SNARK_SCALAR_FIELD.clone()
+    }
+
     // The algorithm for the API Request Signatures can be taken from:
     // https://docs-protocol.loopring.io/resources/request-signing/special-api-request-signatures
 
@@ -56,6 +69,8 @@ impl Helpers {
 
 #[cfg(test)]
 mod tests {
+
+    use std::str::FromStr;
 
     use super::*;
 
@@ -110,5 +125,17 @@ mod tests {
             params,
         );
         assert_eq!("POST&https%3A%2F%2Fapi3.loopring.io%2Fapi%2Fv3%2FapiKey&%7B%22type%22%3A%2212345%22%2C%22accountId%22%3A%2211087%22%7D",test.as_str())
+    }
+    #[test]
+    fn sha256_snark_test() {
+        let message = "GET&https%3A%2F%2Fapi3.loopring.io%2Fapi%2Fv3%2FapiKey&accountId%3D11087";
+        let hash = Helpers::sha256_snark(message);
+        assert_eq!(
+            hash,
+            BigInt::from_str(
+                "5994921150357204702563138282498811875553516325971267534989280218561106882680"
+            )
+            .unwrap()
+        )
     }
 }

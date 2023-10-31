@@ -14,3 +14,4 @@ url = "2.4.1"
 serde_json = "1.0.107"
 percent-encoding = "2.3.0"
 indexmap = { version = "2.0.2", features = ['serde'] }
+sha2 = "0.10.8"
