@@ -10,3 +10,7 @@ num-bigint = "0.4.4"
 lazy_static = "1.4.0"
 blake2b_simd = "1.0.2"
 num-traits = "0.2.17"
+url = "2.4.1"
+serde_json = "1.0.107"
+percent-encoding = "2.3.0"
+indexmap = { version = "2.0.2", features = ['serde'] }
