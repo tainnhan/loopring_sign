@@ -41,6 +41,20 @@ impl FQ {
             m: modulus,
         }
     }
+
+    pub fn one() -> Self {
+        FQ {
+            n: BigInt::from_str("1").unwrap(),
+            m: SNARK_SCALAR_FIELD.clone(),
+        }
+    }
+
+    pub fn zero() -> Self {
+        FQ {
+            n: BigInt::from_str("0").unwrap(),
+            m: SNARK_SCALAR_FIELD.clone(),
+        }
+    }
 }
 
 impl Add for FQ {

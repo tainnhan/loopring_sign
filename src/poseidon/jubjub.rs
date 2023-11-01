@@ -38,9 +38,43 @@ lazy_static! {
     pub static ref JUBJUB_D: BigInt = BigInt::from_str("168696").unwrap();
 }
 
-// pub struct Point {
-//     x: FQ,
-//     y: FQ,
-// }
+pub struct Point {
+    x: FQ,
+    y: FQ,
+}
 
-// impl Point {}
+impl Point {
+    pub fn new(x: BigInt, y: BigInt) -> Point {
+        Point {
+            x: FQ::new(x, None),
+            y: FQ::new(y, None),
+        }
+    }
+
+    // These numbers has beeen taken from https://eips.ethereum.org/EIPS/eip-2494
+    pub fn generate() -> Point {
+        let x = BigInt::from_str(
+            "16540640123574156134436876038791482806971768689494387082833631921987005038935",
+        )
+        .unwrap();
+        let y = BigInt::from_str(
+            "20819045374670962167435360035096875258406992893633759881276124905556507972311",
+        )
+        .unwrap();
+        Point {
+            x: FQ::new(x, None),
+            y: FQ::new(y, None),
+        }
+    }
+
+    // implementation from loopring_sdk python add
+    // def add(self, other):
+    // 	assert isinstance(other, Point)
+    // 	if self.x == 0 and self.y == 0:
+    // 		return other
+    // 	(u1, v1) = (self.x, self.y)
+    // 	(u2, v2) = (other.x, other.y)
+    // 	u3 = (u1*v2 + v1*u2) / (FQ.one() + JUBJUB_D*u1*u2*v1*v2)
+    // 	v3 = (v1*v2 - JUBJUB_A*u1*u2) / (FQ.one() - JUBJUB_D*u1*u2*v1*v2)
+    // 	return Point(u3, v3)
+}
