@@ -20,7 +20,10 @@ intermediate uses a much faster form.
 
 use crate::poseidon::field::SNARK_SCALAR_FIELD;
 use num_bigint::BigInt;
-use std::{ops::Div, str::FromStr};
+use std::{
+    ops::{Add, Div},
+    str::FromStr,
+};
 
 use super::field::FQ;
 
@@ -44,15 +47,12 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn new(x: BigInt, y: BigInt) -> Point {
-        Point {
-            x: FQ::new(x, None),
-            y: FQ::new(y, None),
-        }
+    pub fn new(x: FQ, y: FQ) -> Self {
+        Point { x, y }
     }
 
     // These numbers has beeen taken from https://eips.ethereum.org/EIPS/eip-2494
-    pub fn generate() -> Point {
+    pub fn generate() -> Self {
         let x = BigInt::from_str(
             "16540640123574156134436876038791482806971768689494387082833631921987005038935",
         )
@@ -62,19 +62,168 @@ impl Point {
         )
         .unwrap();
         Point {
-            x: FQ::new(x, None),
-            y: FQ::new(y, None),
+            x: FQ::new(x),
+            y: FQ::new(y),
         }
     }
+}
 
-    // implementation from loopring_sdk python add
-    // def add(self, other):
-    // 	assert isinstance(other, Point)
-    // 	if self.x == 0 and self.y == 0:
-    // 		return other
-    // 	(u1, v1) = (self.x, self.y)
-    // 	(u2, v2) = (other.x, other.y)
-    // 	u3 = (u1*v2 + v1*u2) / (FQ.one() + JUBJUB_D*u1*u2*v1*v2)
-    // 	v3 = (v1*v2 - JUBJUB_A*u1*u2) / (FQ.one() - JUBJUB_D*u1*u2*v1*v2)
-    // 	return Point(u3, v3)
+// Add Implementation for calculation in babyjub
+// https://eips.ethereum.org/EIPS/eip-2494
+// λ = d * x1 * x2 * y1 * y2,
+// x3 = (x1y2 + y1 * x2)/(1 + λ)
+// y3 = (y1 * y2 − a * x1 * x2)/(1 − λ).
+
+impl Add for Point {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let zero = BigInt::from_str("0").unwrap();
+        if self.x.get_n() == &zero && self.x.get_m() == &zero {
+            return rhs;
+        }
+
+        let x1 = &self.x;
+        let x2 = &rhs.x;
+        let y1 = &self.y;
+        let y2 = &rhs.y;
+        let d = FQ::new(JUBJUB_D.clone());
+        let a = FQ::new(JUBJUB_A.clone());
+
+        let lambda = d * x1 * x2 * y1 * y2;
+        let x3 = (x1 * y2 + y1 * x2) / (FQ::one() + &lambda);
+        let y3 = (y1 * y2 - a * x1 * x2) / (FQ::one() - &lambda);
+
+        Point { x: x3, y: y3 }
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn point_add_test_1() {
+        let point = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "5925710879559963920674585068280151559572021649049974518737186312396312983287",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+                )
+                .unwrap(),
+            ),
+        );
+        let other = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "5925710879559963920674585068280151559572021649049974518737186312396312983287",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+                )
+                .unwrap(),
+            ),
+        );
+
+        let sum = point.add(other);
+        assert_eq!(
+            *sum.x.get_n(),
+            BigInt::from_str(
+                "3921821752680400551661691533275335336907961697969280331905459386565873550491",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.x.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.y.get_n(),
+            BigInt::from_str(
+                "8522068897570808837785568881356377871354274006792075192589502922612862896342",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.y.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    pub fn point_add_test_2() {
+        let point = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "10975113445185536695224737904225227344281568447400334915125839333792816477396",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "18445435810976842694581549336952093637971779711294581156054437925992025486446",
+                )
+                .unwrap(),
+            ),
+        );
+        let other = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "5925710879559963920674585068280151559572021649049974518737186312396312983287",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "16975020951829843291561856284829257584634286376639034318405002894754175986822",
+                )
+                .unwrap(),
+            ),
+        );
+
+        let sum = point.add(other);
+        assert_eq!(
+            *sum.x.get_n(),
+            BigInt::from_str(
+                "4991609103248925747358645194965349262579784734809679007552644294476920671344",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.x.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.y.get_n(),
+            BigInt::from_str(
+                "423391641476660815714427268720766993055332927752794962916609674122318189741",
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *sum.y.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            )
+            .unwrap()
+        );
+    }
 }
