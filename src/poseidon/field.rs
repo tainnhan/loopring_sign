@@ -71,6 +71,38 @@ impl Add for FQ {
     }
 }
 
+impl<'a, 'b> Add<&'b FQ> for &'a FQ {
+    type Output = FQ;
+
+    fn add(self, rhs: &'b FQ) -> FQ {
+        FQ {
+            n: (&self.n + &rhs.n) % &self.m,
+            m: self.m.clone(),
+        }
+    }
+}
+
+impl<'a> Add<&'a FQ> for FQ {
+    type Output = FQ;
+
+    fn add(self, rhs: &'a FQ) -> Self::Output {
+        let new_n = (self.n + &rhs.n) % self.m;
+        FQ {
+            n: new_n,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+impl<'a> Add<FQ> for &'a FQ {
+    type Output = FQ;
+
+    fn add(self, rhs: FQ) -> Self::Output {
+        let new_n = (&self.n + rhs.n) % &self.m;
+        FQ { n: new_n, m: rhs.m }
+    }
+}
+
 impl Sub for FQ {
     type Output = Self;
 
@@ -80,10 +112,74 @@ impl Sub for FQ {
     }
 }
 
+impl<'a, 'b> Sub<&'b FQ> for &'a FQ {
+    type Output = FQ;
+
+    fn sub(self, rhs: &'b FQ) -> Self::Output {
+        let new_n = (&self.n - &rhs.n).rem_euclid(&self.m); //Solution will always be positive
+        FQ {
+            n: new_n,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+impl<'a> Sub<&'a FQ> for FQ {
+    type Output = FQ;
+    fn sub(self, rhs: &'a FQ) -> Self::Output {
+        let new_n = (self.n - &rhs.n).rem_euclid(&self.m); //Solution will always be positive
+        FQ {
+            n: new_n,
+            m: rhs.m.clone(),
+        }
+    }
+}
+impl<'a> Sub<FQ> for &'a FQ {
+    type Output = FQ;
+    fn sub(self, rhs: FQ) -> Self::Output {
+        let new_n = (&self.n - rhs.n).rem_euclid(&self.m); //Solution will always be positive
+        FQ { n: new_n, m: rhs.m }
+    }
+}
+
 impl Mul for FQ {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
         let new_n = (self.n * rhs.n) % self.m;
+        FQ { n: new_n, m: rhs.m }
+    }
+}
+// &FQ * &FQ
+impl<'a, 'b> Mul<&'b FQ> for &'a FQ {
+    type Output = FQ;
+
+    fn mul(self, rhs: &'b FQ) -> Self::Output {
+        let new_n = (&self.n * &rhs.n) % &self.m;
+        FQ {
+            n: new_n,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+// FQ * &FQ
+impl<'a> Mul<&'a FQ> for FQ {
+    type Output = FQ;
+
+    fn mul(self, rhs: &'a FQ) -> Self::Output {
+        let new_n = (self.n * &rhs.n) % self.m;
+        FQ {
+            n: new_n,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+// &FQ * FQ
+impl<'a> Mul<FQ> for &'a FQ {
+    type Output = FQ;
+    fn mul(self, rhs: FQ) -> Self::Output {
+        let new_n = (&self.n * rhs.n) % &self.m;
         FQ { n: new_n, m: rhs.m }
     }
 }
@@ -104,6 +200,46 @@ impl Div for FQ {
         FQ {
             n: result,
             m: rhs.m,
+        }
+    }
+}
+
+impl<'a, 'b> Div<&'b FQ> for &'a FQ {
+    type Output = FQ;
+
+    fn div(self, rhs: &'b FQ) -> Self::Output {
+        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
+        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
+        let result = &self.n * multiplicative_inverse % &self.m;
+        FQ {
+            n: result,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+impl<'a> Div<&'a FQ> for FQ {
+    type Output = FQ;
+    fn div(self, rhs: &'a FQ) -> Self::Output {
+        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
+        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
+        let result = self.n * multiplicative_inverse % self.m;
+        FQ {
+            n: result,
+            m: rhs.m.clone(),
+        }
+    }
+}
+
+impl<'a> Div<FQ> for &'a FQ {
+    type Output = FQ;
+    fn div(self, rhs: FQ) -> Self::Output {
+        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
+        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
+        let result = &self.n * multiplicative_inverse % &self.m;
+        FQ {
+            n: result,
+            m: rhs.m.clone(),
         }
     }
 }
