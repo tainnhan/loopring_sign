@@ -33,13 +33,19 @@ pub struct FQ {
 }
 
 impl FQ {
-    pub fn new(n: BigInt, m: Option<BigInt>) -> Self {
-        let modulus = m.unwrap_or_else(|| SNARK_SCALAR_FIELD.clone());
+    pub fn get_n(&self) -> &BigInt {
+        &self.n
+    }
+    pub fn get_m(&self) -> &BigInt {
+        &self.m
+    }
 
-        FQ {
-            n: n % &modulus,
-            m: modulus,
-        }
+    pub fn new(n: BigInt) -> Self {
+        Self::with_modulus(n, SNARK_SCALAR_FIELD.clone())
+    }
+
+    pub fn with_modulus(n: BigInt, m: BigInt) -> Self {
+        FQ { n: n % &m, m: m }
     }
 
     pub fn one() -> Self {
@@ -131,8 +137,8 @@ mod tests {
         )
         .unwrap();
 
-        let field_1 = FQ::new(n1, None);
-        let field_2 = FQ::new(n2, None);
+        let field_1 = FQ::new(n1);
+        let field_2 = FQ::new(n2);
         let result = field_1.add(field_2);
         let real_result = BigInt::from_str(
             "17039040678035688098169083453273431042237471845415528443436549201766984616476",
@@ -151,8 +157,8 @@ mod tests {
         )
         .unwrap();
 
-        let field_1 = FQ::new(n1, None);
-        let field_2 = FQ::new(n2, None);
+        let field_1 = FQ::new(n1);
+        let field_2 = FQ::new(n2);
 
         let result_1 = field_1.clone().sub(field_2.clone());
         let result_2 = field_2.clone().sub(field_1.clone());
@@ -189,9 +195,9 @@ mod tests {
         )
         .unwrap();
 
-        let field_1 = FQ::new(n1, None);
-        let field_2 = FQ::new(n2, None);
-        let field_3 = FQ::new(n3, None);
+        let field_1 = FQ::new(n1);
+        let field_2 = FQ::new(n2);
+        let field_3 = FQ::new(n3);
 
         let result_1 = field_1.clone().mul(field_2.clone()).mul(field_3.clone());
         let result_2 = field_1.clone().mul(field_3.clone());
@@ -228,9 +234,9 @@ mod tests {
         )
         .unwrap();
 
-        let field_1 = FQ::new(n1, None);
-        let field_2 = FQ::new(n2, None);
-        let field_3 = FQ::new(n3, None);
+        let field_1 = FQ::new(n1);
+        let field_2 = FQ::new(n2);
+        let field_3 = FQ::new(n3);
 
         let result1 = field_1.clone().div(field_2.clone());
         let result2 = field_2.clone().div(field_1.clone());
