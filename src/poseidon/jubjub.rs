@@ -18,14 +18,14 @@ intermediate uses a much faster form.
 */
 // ax^2 + y^2 = 1 + dx^2y^2
 
+use super::field::FQ;
 use crate::poseidon::field::SNARK_SCALAR_FIELD;
 use num_bigint::BigInt;
+use num_traits::{One, Zero};
 use std::{
-    ops::{Add, Div},
+    ops::{Add, Div, Mul},
     str::FromStr,
 };
-
-use super::field::FQ;
 
 lazy_static! {
     pub static ref JUBJUB_Q: BigInt = SNARK_SCALAR_FIELD.clone();
@@ -66,27 +66,21 @@ impl Point {
             y: FQ::new(y),
         }
     }
-}
 
-// Add Implementation for calculation in babyjub
-// https://eips.ethereum.org/EIPS/eip-2494
-// λ = d * x1 * x2 * y1 * y2,
-// x3 = (x1y2 + y1 * x2)/(1 + λ)
-// y3 = (y1 * y2 − a * x1 * x2)/(1 − λ).
-
-impl Add for Point {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let zero = BigInt::from_str("0").unwrap();
-        if self.x.get_n() == &zero && self.x.get_m() == &zero {
-            return rhs;
+    pub fn infinity() -> Self {
+        Point {
+            x: FQ::new(BigInt::zero()),
+            y: FQ::new(BigInt::one()),
         }
+    }
 
-        let x1 = &self.x;
-        let x2 = &rhs.x;
-        let y1 = &self.y;
-        let y2 = &rhs.y;
+    // Add Implementation for calculation in babyjub
+    // https://eips.ethereum.org/EIPS/eip-2494
+    // λ = d * x1 * x2 * y1 * y2,
+    // x3 = (x1y2 + y1 * x2)/(1 + λ)
+    // y3 = (y1 * y2 − a * x1 * x2)/(1 − λ).
+
+    fn add_points(x1: &FQ, y1: &FQ, x2: &FQ, y2: &FQ) -> Point {
         let d = FQ::new(JUBJUB_D.clone());
         let a = FQ::new(JUBJUB_A.clone());
 
@@ -96,15 +90,91 @@ impl Add for Point {
 
         Point { x: x3, y: y3 }
     }
+    fn is_at_inifinity(&self) -> bool {
+        let zero = BigInt::from_str("0").unwrap();
+        self.x.get_n() == &zero && self.y.get_n() == &zero
+    }
+
+    // Add eliptic curve multiplication using the double-and-add method:
+    // 1. https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication
+    // 2. https://iden3-docs.readthedocs.io/en/latest/_downloads/33717d75ab84e11313cc0d8a090b636f/Baby-Jubjub.pdf
+
+    fn scalar_mul(point: Point, mut scalar: BigInt) -> Point {
+        let mut p = Point::new(point.x, point.y);
+        let mut a = Self::infinity();
+        let mut i = 0;
+
+        while scalar != BigInt::zero() {
+            let bitwise_and = &scalar & BigInt::from(1);
+            if bitwise_and != BigInt::from(0) {
+                a = a + &p;
+            }
+            let copy_p1 = p.clone();
+            let copy_p2 = p.clone();
+            p = copy_p1 + copy_p2;
+            scalar = scalar.div(BigInt::from(2));
+            i = i + 1;
+        }
+        a
+    }
+}
+
+impl Add for Point {
+    type Output = Self;
+    fn add(self, rhs: Point) -> Self::Output {
+        if self.is_at_inifinity() {
+            return rhs;
+        }
+        Point::add_points(&self.x, &self.y, &rhs.x, &rhs.y)
+    }
+}
+
+impl<'a> Add<&'a Point> for Point {
+    type Output = Self;
+    fn add(self, rhs: &'a Point) -> Self::Output {
+        if self.is_at_inifinity() {
+            return rhs.clone();
+        }
+        Point::add_points(&self.x, &self.y, &rhs.x, &rhs.y)
+    }
+}
+
+impl Mul<BigInt> for Point {
+    type Output = Point;
+
+    fn mul(self, scalar: BigInt) -> Self::Output {
+        Point::scalar_mul(self, scalar)
+    }
+}
+impl Mul<Point> for BigInt {
+    type Output = Point;
+
+    fn mul(self, rhs: Point) -> Self::Output {
+        Point::scalar_mul(rhs, self)
+    }
+}
+
+impl Clone for Point {
+    fn clone(&self) -> Self {
+        Self {
+            x: self.x.clone(),
+            y: self.y.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        *self = source.clone()
+    }
 }
 
 #[cfg(test)]
-
 mod tests {
+    use num_traits::Zero;
+
     use super::*;
 
     #[test]
-    pub fn point_add_test_1() {
+    fn point_add_test_1() {
         let point = Point::new(
             FQ::new(
                 BigInt::from_str(
@@ -166,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    pub fn point_add_test_2() {
+    fn point_add_test_2() {
         let point = Point::new(
             FQ::new(
                 BigInt::from_str(
@@ -222,6 +292,171 @@ mod tests {
             *sum.y.get_m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            )
+            .unwrap()
+        );
+    }
+    #[test]
+    fn test_divide_1() {
+        let scalar = BigInt::from(1);
+        let result = scalar.div(2);
+        assert_eq!(BigInt::zero(), result);
+    }
+
+    #[test]
+    fn test_divide_2() {
+        let scalar = BigInt::from(2);
+        let result = scalar.div(2);
+        assert_eq!(BigInt::from(1), result);
+    }
+
+    #[test]
+    fn test_bitwise_and_1() {
+        let scalar = BigInt::from(1);
+        let result = scalar & BigInt::from(1);
+        assert_eq!(result, BigInt::from(1))
+    }
+    #[test]
+    fn point_mul_1() {
+        let B = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "16540640123574156134436876038791482806971768689494387082833631921987005038935",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "20819045374670962167435360035096875258406992893633759881276124905556507972311",
+                )
+                .unwrap(),
+            ),
+        );
+        let k = BigInt::from(1);
+        let A = k * B;
+        assert_eq!(
+            *A.x.get_n(),
+            BigInt::from_str(
+                "16540640123574156134436876038791482806971768689494387082833631921987005038935"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.x.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_n(),
+            BigInt::from_str(
+                "20819045374670962167435360035096875258406992893633759881276124905556507972311"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn point_mul_2() {
+        let B = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "16540640123574156134436876038791482806971768689494387082833631921987005038935",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "20819045374670962167435360035096875258406992893633759881276124905556507972311",
+                )
+                .unwrap(),
+            ),
+        );
+        let k = BigInt::from(2);
+        let A = k * B;
+        assert_eq!(
+            *A.x.get_n(),
+            BigInt::from_str(
+                "17324563846726889236817837922625232543153115346355010501047597319863650987830"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.x.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_n(),
+            BigInt::from_str(
+                "20022170825455209233733649024450576091402881793145646502279487074566492066831"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+            )
+            .unwrap()
+        );
+    }
+    #[test]
+    fn point_mul_3() {
+        let x = FQ::new(
+            BigInt::from_str(
+                "16540640123574156134436876038791482806971768689494387082833631921987005038935",
+            )
+            .unwrap(),
+        );
+        let y = FQ::new(
+            BigInt::from_str(
+                "20819045374670962167435360035096875258406992893633759881276124905556507972311",
+            )
+            .unwrap(),
+        );
+        let B = Point::new(x, y);
+        let k = BigInt::from_str(
+            "456425617452149303537516185998917840598824274191970480768523181450944242406",
+        )
+        .unwrap();
+        let A = B * k;
+
+        assert_eq!(
+            *A.x.get_n(),
+            BigInt::from_str(
+                "4991609103248925747358645194965349262579784734809679007552644294476920671344"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.x.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_n(),
+            BigInt::from_str(
+                "423391641476660815714427268720766993055332927752794962916609674122318189741"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *A.y.get_m(),
+            BigInt::from_str(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
             .unwrap()
         );
