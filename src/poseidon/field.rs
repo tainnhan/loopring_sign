@@ -33,10 +33,10 @@ pub struct FQ {
 }
 
 impl FQ {
-    pub fn get_n(&self) -> &BigInt {
+    pub fn n(&self) -> &BigInt {
         &self.n
     }
-    pub fn get_m(&self) -> &BigInt {
+    pub fn m(&self) -> &BigInt {
         &self.m
     }
 
@@ -62,7 +62,7 @@ impl FQ {
         }
     }
 }
-
+// field1 + field2
 impl Add for FQ {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -70,7 +70,7 @@ impl Add for FQ {
         FQ { n: new_n, m: rhs.m }
     }
 }
-
+// &field1 + &field2
 impl<'a, 'b> Add<&'b FQ> for &'a FQ {
     type Output = FQ;
 
@@ -81,7 +81,7 @@ impl<'a, 'b> Add<&'b FQ> for &'a FQ {
         }
     }
 }
-
+// &field1 + field2
 impl<'a> Add<&'a FQ> for FQ {
     type Output = FQ;
 

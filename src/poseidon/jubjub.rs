@@ -50,6 +50,13 @@ impl Point {
     pub fn new(x: FQ, y: FQ) -> Self {
         Point { x, y }
     }
+    pub fn x(&self) -> &FQ {
+        &self.x
+    }
+
+    pub fn y(&self) -> &FQ {
+        &self.x
+    }
 
     // These numbers has beeen taken from https://eips.ethereum.org/EIPS/eip-2494
     pub fn generate() -> Self {
@@ -92,7 +99,7 @@ impl Point {
     }
     fn is_at_inifinity(&self) -> bool {
         let zero = BigInt::from_str("0").unwrap();
-        self.x.get_n() == &zero && self.y.get_n() == &zero
+        self.x.n() == &zero && self.y.n() == &zero
     }
 
     // Add eliptic curve multiplication using the double-and-add method:
@@ -146,6 +153,14 @@ impl Mul<BigInt> for Point {
         Point::scalar_mul(self, scalar)
     }
 }
+// impl<'a> Mul<&'a BigInt> for Point {
+//     type Output = Point;
+
+//     fn mul(self, scalar: &'a BigInt) -> Self::Output {
+//         Point::scalar_mul(self, scalar.clone())
+//     }
+// }
+
 impl Mul<Point> for BigInt {
     type Output = Point;
 
@@ -206,28 +221,28 @@ mod tests {
 
         let sum = point.add(other);
         assert_eq!(
-            *sum.x.get_n(),
+            *sum.x.n(),
             BigInt::from_str(
                 "3921821752680400551661691533275335336907961697969280331905459386565873550491",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.x.get_m(),
+            *sum.x.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.y.get_n(),
+            *sum.y.n(),
             BigInt::from_str(
                 "8522068897570808837785568881356377871354274006792075192589502922612862896342",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.y.get_m(),
+            *sum.y.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617",
             )
@@ -268,28 +283,28 @@ mod tests {
 
         let sum = point.add(other);
         assert_eq!(
-            *sum.x.get_n(),
+            *sum.x.n(),
             BigInt::from_str(
                 "4991609103248925747358645194965349262579784734809679007552644294476920671344",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.x.get_m(),
+            *sum.x.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.y.get_n(),
+            *sum.y.n(),
             BigInt::from_str(
                 "423391641476660815714427268720766993055332927752794962916609674122318189741",
             )
             .unwrap()
         );
         assert_eq!(
-            *sum.y.get_m(),
+            *sum.y.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617",
             )
@@ -318,7 +333,7 @@ mod tests {
     }
     #[test]
     fn point_mul_1() {
-        let B = Point::new(
+        let b = Point::new(
             FQ::new(
                 BigInt::from_str(
                     "16540640123574156134436876038791482806971768689494387082833631921987005038935",
@@ -333,30 +348,30 @@ mod tests {
             ),
         );
         let k = BigInt::from(1);
-        let A = k * B;
+        let a = k * b;
         assert_eq!(
-            *A.x.get_n(),
+            *a.x.n(),
             BigInt::from_str(
                 "16540640123574156134436876038791482806971768689494387082833631921987005038935"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.x.get_m(),
+            *a.x.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_n(),
+            *a.y.n(),
             BigInt::from_str(
                 "20819045374670962167435360035096875258406992893633759881276124905556507972311"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_m(),
+            *a.y.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
@@ -366,7 +381,7 @@ mod tests {
 
     #[test]
     fn point_mul_2() {
-        let B = Point::new(
+        let b = Point::new(
             FQ::new(
                 BigInt::from_str(
                     "16540640123574156134436876038791482806971768689494387082833631921987005038935",
@@ -381,30 +396,30 @@ mod tests {
             ),
         );
         let k = BigInt::from(2);
-        let A = k * B;
+        let a = k * b;
         assert_eq!(
-            *A.x.get_n(),
+            *a.x.n(),
             BigInt::from_str(
                 "17324563846726889236817837922625232543153115346355010501047597319863650987830"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.x.get_m(),
+            *a.x.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_n(),
+            *a.y.n(),
             BigInt::from_str(
                 "20022170825455209233733649024450576091402881793145646502279487074566492066831"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_m(),
+            *a.y.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
@@ -425,36 +440,36 @@ mod tests {
             )
             .unwrap(),
         );
-        let B = Point::new(x, y);
+        let b = Point::new(x, y);
         let k = BigInt::from_str(
             "456425617452149303537516185998917840598824274191970480768523181450944242406",
         )
         .unwrap();
-        let A = B * k;
+        let a = b * k;
 
         assert_eq!(
-            *A.x.get_n(),
+            *a.x.n(),
             BigInt::from_str(
                 "4991609103248925747358645194965349262579784734809679007552644294476920671344"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.x.get_m(),
+            *a.x.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_n(),
+            *a.y.n(),
             BigInt::from_str(
                 "423391641476660815714427268720766993055332927752794962916609674122318189741"
             )
             .unwrap()
         );
         assert_eq!(
-            *A.y.get_m(),
+            *a.y.m(),
             BigInt::from_str(
                 "21888242871839275222246405745257275088548364400416034343698204186575808495617"
             )
