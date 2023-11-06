@@ -55,7 +55,7 @@ impl Point {
     }
 
     pub fn y(&self) -> &FQ {
-        &self.x
+        &self.y
     }
 
     // These numbers has beeen taken from https://eips.ethereum.org/EIPS/eip-2494
@@ -79,6 +79,9 @@ impl Point {
             x: FQ::new(BigInt::zero()),
             y: FQ::new(BigInt::one()),
         }
+    }
+    pub fn as_scalar(&self) -> Vec<BigInt> {
+        vec![self.x.n().clone(), self.y.n().clone()]
     }
 
     // Add Implementation for calculation in babyjub
@@ -106,8 +109,8 @@ impl Point {
     // 1. https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication
     // 2. https://iden3-docs.readthedocs.io/en/latest/_downloads/33717d75ab84e11313cc0d8a090b636f/Baby-Jubjub.pdf
 
-    fn scalar_mul(point: Point, mut scalar: BigInt) -> Point {
-        let mut p = Point::new(point.x, point.y);
+    fn scalar_mul(point: &Point, mut scalar: BigInt) -> Point {
+        let mut p = Point::new(point.x.clone(), point.y.clone());
         let mut a = Self::infinity();
         let mut i = 0;
 
@@ -150,22 +153,30 @@ impl Mul<BigInt> for Point {
     type Output = Point;
 
     fn mul(self, scalar: BigInt) -> Self::Output {
-        Point::scalar_mul(self, scalar)
+        Point::scalar_mul(&self, scalar)
     }
 }
-// impl<'a> Mul<&'a BigInt> for Point {
-//     type Output = Point;
+impl<'a> Mul<&'a BigInt> for Point {
+    type Output = Point;
 
-//     fn mul(self, scalar: &'a BigInt) -> Self::Output {
-//         Point::scalar_mul(self, scalar.clone())
-//     }
-// }
+    fn mul(self, scalar: &'a BigInt) -> Self::Output {
+        Point::scalar_mul(&self, scalar.clone())
+    }
+}
+
+impl<'a, 'b> Mul<&'b BigInt> for &'a Point {
+    type Output = Point;
+
+    fn mul(self, scalar: &'b BigInt) -> Self::Output {
+        Point::scalar_mul(self, scalar.clone())
+    }
+}
 
 impl Mul<Point> for BigInt {
     type Output = Point;
 
     fn mul(self, rhs: Point) -> Self::Output {
-        Point::scalar_mul(rhs, self)
+        Point::scalar_mul(&rhs, self)
     }
 }
 
@@ -348,7 +359,7 @@ mod tests {
             ),
         );
         let k = BigInt::from(1);
-        let a = k * b;
+        let a = &b * &k;
         assert_eq!(
             *a.x.n(),
             BigInt::from_str(
@@ -396,7 +407,7 @@ mod tests {
             ),
         );
         let k = BigInt::from(2);
-        let a = k * b;
+        let a = &b * &k;
         assert_eq!(
             *a.x.n(),
             BigInt::from_str(
