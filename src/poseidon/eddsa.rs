@@ -30,11 +30,13 @@ For further information see: https://ed2519.cr.yp.to/eddsa-20150704.pdf
 use super::{
     field::{FQ, SNARK_SCALAR_FIELD},
     jubjub::{Point, JUBJUB_L},
+    permutation::{self, Poseidon},
 };
 use crate::util::helpers::{generate_signature_base_string, sha256_snark, to_bytes_32};
 use num_bigint::{BigInt, Sign};
 use num_traits::{Num, Zero};
 use sha2::{Digest, Sha512};
+
 pub struct Signature {
     R: Point,
     s: FQ,
@@ -61,9 +63,14 @@ impl SignatureScheme {
     pub fn sign(private_key: BigInt, hash: BigInt) {
         let base_point = Self::base_point();
 
-        let a = base_point * private_key.clone();
-        let m = hash;
-        let r = Self::hash_secret(FQ::new(private_key), m);
+        let A = &base_point * &private_key;
+        let M = hash; // prehash message
+        let r = Self::hash_secret(FQ::new(private_key), &M);
+
+        let R = &base_point * &r;
+
+        Self::hash_public(&R, &A, M);
+        ()
     }
 
     /*
@@ -79,7 +86,7 @@ impl SignatureScheme {
         can replace `r` with `r mod L` before computing `rB`.)
     */
 
-    fn hash_secret(k: FQ, arg: BigInt) -> BigInt {
+    fn hash_secret(k: FQ, arg: &BigInt) -> BigInt {
         let mut key_bytes = to_bytes_32(k.n());
         let hash_bytes = to_bytes_32(&arg);
         key_bytes.extend(hash_bytes);
@@ -89,6 +96,27 @@ impl SignatureScheme {
         let hash = BigInt::from_bytes_le(Sign::Plus, &hasher.finalize()[..]);
 
         hash % JUBJUB_L.clone()
+    }
+
+    fn hash_public(R: &Point, A: &Point, M: BigInt) -> BigInt {
+        let mut input: Vec<BigInt> = Vec::new();
+        input.extend(R.as_scalar());
+        input.extend(A.as_scalar());
+        input.extend(vec![M]);
+
+        let poseidon = Poseidon::new(
+            SNARK_SCALAR_FIELD.clone(),
+            6,
+            6,
+            52,
+            format!("poseidon"),
+            BigInt::from(5),
+            None,
+            None,
+            128,
+        );
+
+        poseidon.calculate_poseidon(input).unwrap()
     }
 }
 
@@ -124,11 +152,59 @@ mod tests {
         )
         .unwrap();
 
-        let result = SignatureScheme::hash_secret(k, arg);
+        let result = SignatureScheme::hash_secret(k, &arg);
         assert_eq!(
             result,
             BigInt::from_str(
                 "456425617452149303537516185998917840598824274191970480768523181450944242406"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn hash_public_test() {
+        let R = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "4991609103248925747358645194965349262579784734809679007552644294476920671344",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "423391641476660815714427268720766993055332927752794962916609674122318189741",
+                )
+                .unwrap(),
+            ),
+        );
+
+        let A = Point::new(
+            FQ::new(
+                BigInt::from_str(
+                    "16540640123574156134436876038791482806971768689494387082833631921987005038935",
+                )
+                .unwrap(),
+            ),
+            FQ::new(
+                BigInt::from_str(
+                    "20819045374670962167435360035096875258406992893633759881276124905556507972311",
+                )
+                .unwrap(),
+            ),
+        );
+
+        let M = BigInt::from_str(
+            "20693456676802104653139582814194312788878632719314804297029697306071204881418",
+        )
+        .unwrap();
+
+        let result = SignatureScheme::hash_public(&R, &A, M);
+
+        assert_eq!(
+            result,
+            BigInt::from_str(
+                "4221734722145693593102605227029250076638572186265556559955657451417362287555"
             )
             .unwrap()
         );
