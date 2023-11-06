@@ -27,16 +27,14 @@ For Hash-EdDSA, the message `M` is compressed before H(R,A,M)
 For further information see: https://ed2519.cr.yp.to/eddsa-20150704.pdf
 */
 
-use std::fmt::format;
-
 use super::{
     field::{FQ, SNARK_SCALAR_FIELD},
     jubjub::{Point, JUBJUB_E, JUBJUB_L},
-    permutation::{self, Poseidon},
+    permutation::Poseidon,
 };
 use crate::util::helpers::{generate_signature_base_string, sha256_snark, to_bytes_32};
 use num_bigint::{BigInt, Sign};
-use num_traits::{sign, Num, Zero};
+use num_traits::{Num, Zero};
 use sha2::{Digest, Sha512};
 
 pub struct Signature {
@@ -45,6 +43,14 @@ pub struct Signature {
 }
 
 impl Signature {
+    pub fn R(&self) -> &Point {
+        &self.R
+    }
+
+    pub fn s(&self) -> &FQ {
+        &self.s
+    }
+
     pub fn new(R: Point, s: FQ) -> Self {
         Signature { R, s }
     }
@@ -61,6 +67,17 @@ pub struct SignedMessage {
 }
 
 impl SignedMessage {
+    pub fn A(&self) -> &Point {
+        &self.A
+    }
+    pub fn sig(&self) -> &Signature {
+        &self.sig
+    }
+
+    pub fn msg(&self) -> &BigInt {
+        &self.msg
+    }
+
     pub fn new(A: Point, sig: Signature, msg: BigInt) -> Self {
         SignedMessage { A, sig, msg }
     }
@@ -156,7 +173,7 @@ pub fn generate_eddsa_signature(
     url: &str,
     data: &[(&str, &str)],
     hex_private_key: &str,
-) {
+) -> String {
     let signature_base = generate_signature_base_string(request_type, url, data);
     let hash = sha256_snark(&signature_base);
 
@@ -166,8 +183,13 @@ pub fn generate_eddsa_signature(
             Err(_) => BigInt::zero(),
         };
 
-    SignatureScheme::sign(private_key_big_int, hash);
-    ()
+    let signed_message = SignatureScheme::sign(private_key_big_int, hash);
+
+    let r_x_hex = format!("{:0>64}", signed_message.sig().R().x().n().to_str_radix(16));
+    let r_y_hex: String = format!("{:0>64}", signed_message.sig().R().y().n().to_str_radix(16));
+    let s_hex: String = format!("{:0>64}", signed_message.sig().s().n().to_str_radix(16));
+
+    format!("0x{}{}{}", r_x_hex, r_y_hex, s_hex)
 }
 
 #[cfg(test)]
@@ -255,5 +277,39 @@ mod tests {
         let duration = start.elapsed();
         println!("{}", duration.as_secs());
         assert_eq!(signed.to_string(), "16540640123574156134436876038791482806971768689494387082833631921987005038935 20819045374670962167435360035096875258406992893633759881276124905556507972311 4991609103248925747358645194965349262579784734809679007552644294476920671344 423391641476660815714427268720766993055332927752794962916609674122318189741 4678160339597842896640121413028167917237396460457527040724180632868306529961 20693456676802104653139582814194312788878632719314804297029697306071204881418" )
+    }
+    #[test]
+    fn sign_test_2() {
+        let key = BigInt::from_str(
+            "1965533437444427599736796973543479035828634172708055838572430750620147597402",
+        )
+        .unwrap();
+
+        let msg = BigInt::from_str(
+            "20823375595941673465102915960468301465677704522962441935281926279865178787657",
+        )
+        .unwrap();
+        let signed = SignatureScheme::sign(key, msg);
+        assert_eq!(
+            *signed.sig().R().x().n(),
+            BigInt::from_str(
+                "2114973053955517366033592592501464590076342821657201629830614924692550700766"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *signed.sig().R().y().n(),
+            BigInt::from_str(
+                "6713953096854639492359183468711112854151280690992619923536842965423886430417"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            *signed.sig().s().n(),
+            BigInt::from_str(
+                "21100876117443371431735908718802018647851328087147897184613053393129281831653"
+            )
+            .unwrap()
+        );
     }
 }
