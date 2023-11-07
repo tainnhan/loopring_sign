@@ -16,7 +16,7 @@ Add this to your Cargo.toml
 
 ```rust
 [dependencies]
-loopring_sign = "0.1.0"
+loopring_sign = "0.1.1"
 ```
 
 ## Usage example
