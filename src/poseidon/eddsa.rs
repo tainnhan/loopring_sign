@@ -327,4 +327,14 @@ mod tests {
             .unwrap()
         );
     }
+    #[test]
+    fn generate_eddsa_test() {
+        let l2_key = "0x087d254d02a857d215c4c14d72521f8ab6a81ec8f0107eaf16093ebb7c70dc50";
+        let data: &[(&str, &str)] = &[("accountId", "12345")];
+        let request_type = "POST";
+        let url = "https://api3.loopring.io/api/v3/apiKey";
+
+        let result = generate_eddsa_signature(request_type, url, data, l2_key);
+        assert_eq!(result.as_str(), "0x15fdcda3ca2965d2ae43739cc6740e50c08d3f756c6161bcedb10fbc05290e000f3bc31e2293ba91ca7ac55cd20a86ae3541d3dfed63896cd474015ec60b8d40274f98b2d0a87ebf8cd0ee16dc9ec953a229cf0d6b2b61867ca80ba6e8ae1ed3");
+    }
 }
