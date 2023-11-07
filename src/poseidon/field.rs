@@ -50,47 +50,76 @@ impl FQ {
 
     pub fn one() -> Self {
         FQ {
-            n: BigInt::from_str("1").unwrap(),
+            n: BigInt::from(1),
             m: SNARK_SCALAR_FIELD.clone(),
         }
     }
 
     pub fn zero() -> Self {
         FQ {
-            n: BigInt::from_str("0").unwrap(),
+            n: BigInt::from(0),
             m: SNARK_SCALAR_FIELD.clone(),
         }
     }
+    fn addition(n1: &BigInt, n2: &BigInt, modulus: &BigInt) -> Self {
+        let new_n = (n1 + n2) % modulus;
+        FQ {
+            n: new_n,
+            m: modulus.clone(),
+        }
+    }
+
+    fn subtract(n1: &BigInt, n2: &BigInt, m: &BigInt) -> Self {
+        let new_n = (n1 - n2).rem_euclid(m);
+        FQ {
+            n: new_n,
+            m: m.clone(),
+        }
+    }
+
+    fn multiply(n1: &BigInt, n2: &BigInt, modulus: &BigInt) -> Self {
+        let new_n = (n1 * n2) % modulus;
+        FQ {
+            n: new_n,
+            m: modulus.clone(),
+        }
+    }
+
+    // The division in a finite field acts differently than the usual division operation.
+    // This can be done through Fermat's Little Thereom, through multiplication of inverse modulo p.
+    // Fermat little thereom: n(^p-1) = 1 mod p -> n * n^(p-2) = 1 mod p
+    // So our final calculation looks like this: n1 * n2^(p-2) mod m.
+    // Where n1 is the number of the first Point and n2 is the number of the second Point.
+
+    fn divide(n: &BigInt, m: &BigInt, rhs_n: &BigInt, rhs_m: &BigInt) -> Self {
+        let fermat_exponent = rhs_m - (BigInt::one() + BigInt::one());
+        let multiplicative_inverse: BigInt = rhs_n.modpow(&fermat_exponent, rhs_m);
+        let result = (n * multiplicative_inverse) % m;
+
+        FQ {
+            n: result,
+            m: m.clone(),
+        }
+    }
 }
-// field1 + field2
 impl Add for FQ {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
-        let new_n = (self.n + rhs.n) % self.m;
-        FQ { n: new_n, m: rhs.m }
+        FQ::addition(&self.n, &rhs.n, &self.m)
     }
 }
-// &field1 + &field2
 impl<'a, 'b> Add<&'b FQ> for &'a FQ {
     type Output = FQ;
 
     fn add(self, rhs: &'b FQ) -> FQ {
-        FQ {
-            n: (&self.n + &rhs.n) % &self.m,
-            m: self.m.clone(),
-        }
+        FQ::addition(&self.n, &rhs.n, &self.m)
     }
 }
-// &field1 + field2
 impl<'a> Add<&'a FQ> for FQ {
     type Output = FQ;
 
     fn add(self, rhs: &'a FQ) -> Self::Output {
-        let new_n = (self.n + &rhs.n) % self.m;
-        FQ {
-            n: new_n,
-            m: rhs.m.clone(),
-        }
+        FQ::addition(&self.n, &rhs.n, &self.m)
     }
 }
 
@@ -98,8 +127,7 @@ impl<'a> Add<FQ> for &'a FQ {
     type Output = FQ;
 
     fn add(self, rhs: FQ) -> Self::Output {
-        let new_n = (&self.n + rhs.n) % &self.m;
-        FQ { n: new_n, m: rhs.m }
+        FQ::addition(&self.n, &rhs.n, &self.m)
     }
 }
 
@@ -107,8 +135,7 @@ impl Sub for FQ {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        let new_n = (self.n - rhs.n).rem_euclid(&self.m); //Solution will always be positive
-        FQ { n: new_n, m: rhs.m }
+        FQ::subtract(&self.n, &rhs.n, &self.m)
     }
 }
 
@@ -116,91 +143,57 @@ impl<'a, 'b> Sub<&'b FQ> for &'a FQ {
     type Output = FQ;
 
     fn sub(self, rhs: &'b FQ) -> Self::Output {
-        let new_n = (&self.n - &rhs.n).rem_euclid(&self.m); //Solution will always be positive
-        FQ {
-            n: new_n,
-            m: rhs.m.clone(),
-        }
+        FQ::subtract(&self.n, &rhs.n, &self.m)
     }
 }
 
 impl<'a> Sub<&'a FQ> for FQ {
     type Output = FQ;
     fn sub(self, rhs: &'a FQ) -> Self::Output {
-        let new_n = (self.n - &rhs.n).rem_euclid(&self.m); //Solution will always be positive
-        FQ {
-            n: new_n,
-            m: rhs.m.clone(),
-        }
+        FQ::subtract(&self.n, &rhs.n, &self.m)
     }
 }
 impl<'a> Sub<FQ> for &'a FQ {
     type Output = FQ;
     fn sub(self, rhs: FQ) -> Self::Output {
-        let new_n = (&self.n - rhs.n).rem_euclid(&self.m); //Solution will always be positive
-        FQ { n: new_n, m: rhs.m }
+        FQ::subtract(&self.n, &rhs.n, &self.m)
     }
 }
 
 impl Mul for FQ {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
-        let new_n = (self.n * rhs.n) % self.m;
-        FQ { n: new_n, m: rhs.m }
+        FQ::multiply(&self.n, &rhs.n, &self.m)
     }
 }
-// &FQ * &FQ
 impl<'a, 'b> Mul<&'b FQ> for &'a FQ {
     type Output = FQ;
 
     fn mul(self, rhs: &'b FQ) -> Self::Output {
-        let new_n = (&self.n * &rhs.n) % &self.m;
-        FQ {
-            n: new_n,
-            m: rhs.m.clone(),
-        }
+        FQ::multiply(&self.n, &rhs.n, &self.m)
     }
 }
 
-// FQ * &FQ
 impl<'a> Mul<&'a FQ> for FQ {
     type Output = FQ;
 
     fn mul(self, rhs: &'a FQ) -> Self::Output {
-        let new_n = (self.n * &rhs.n) % self.m;
-        FQ {
-            n: new_n,
-            m: rhs.m.clone(),
-        }
+        FQ::multiply(&self.n, &rhs.n, &self.m)
     }
 }
 
-// &FQ * FQ
 impl<'a> Mul<FQ> for &'a FQ {
     type Output = FQ;
     fn mul(self, rhs: FQ) -> Self::Output {
-        let new_n = (&self.n * rhs.n) % &self.m;
-        FQ { n: new_n, m: rhs.m }
+        FQ::multiply(&self.n, &rhs.n, &self.m)
     }
 }
-
-// The division in a finite field acts differently than the usual division operation.
-// This can be done through Fermat's Little Thereom, through multiplication of inverse modulo p.
-// Fermat little thereom: n(^p-1) = 1 mod p -> n * n^(p-2) = 1 mod p
-// So our final calculation looks like this: n1 * n2^(p-2) mod m.
-// Where n1 is the number of the first Point and n2 is the number of the second Point.
 
 impl Div for FQ {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
-        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
-        let result = self.n * multiplicative_inverse % self.m;
-        FQ {
-            n: result,
-            m: rhs.m,
-        }
+        FQ::divide(&self.n, &self.m, &rhs.n, &rhs.m)
     }
 }
 
@@ -208,39 +201,21 @@ impl<'a, 'b> Div<&'b FQ> for &'a FQ {
     type Output = FQ;
 
     fn div(self, rhs: &'b FQ) -> Self::Output {
-        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
-        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
-        let result = &self.n * multiplicative_inverse % &self.m;
-        FQ {
-            n: result,
-            m: rhs.m.clone(),
-        }
+        FQ::divide(&self.n, &self.m, &rhs.n, &rhs.m)
     }
 }
 
 impl<'a> Div<&'a FQ> for FQ {
     type Output = FQ;
     fn div(self, rhs: &'a FQ) -> Self::Output {
-        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
-        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
-        let result = self.n * multiplicative_inverse % self.m;
-        FQ {
-            n: result,
-            m: rhs.m.clone(),
-        }
+        FQ::divide(&self.n, &self.m, &rhs.n, &rhs.m)
     }
 }
 
 impl<'a> Div<FQ> for &'a FQ {
     type Output = FQ;
     fn div(self, rhs: FQ) -> Self::Output {
-        let fermat_exponent = &rhs.m - (BigInt::one() + BigInt::one());
-        let multiplicative_inverse: BigInt = rhs.n.modpow(&fermat_exponent, &rhs.m);
-        let result = &self.n * multiplicative_inverse % &self.m;
-        FQ {
-            n: result,
-            m: rhs.m.clone(),
-        }
+        FQ::divide(&self.n, &self.m, &rhs.n, &rhs.m)
     }
 }
 

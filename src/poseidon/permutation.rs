@@ -29,9 +29,6 @@ impl AsBytes for &str {
     }
 }
 
-//
-// describe the general paramters of poseidon
-//
 pub struct Poseidon {
     p: BigInt,
     t: usize,

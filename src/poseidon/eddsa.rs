@@ -38,37 +38,42 @@ use num_traits::{Num, Zero};
 use sha2::{Digest, Sha512};
 
 pub struct Signature {
-    R: Point,
+    image_of_r: Point,
     s: FQ,
 }
 
 impl Signature {
-    pub fn R(&self) -> &Point {
-        &self.R
+    pub fn image_of_r(&self) -> &Point {
+        &self.image_of_r
     }
 
     pub fn s(&self) -> &FQ {
         &self.s
     }
 
-    pub fn new(R: Point, s: FQ) -> Self {
-        Signature { R, s }
+    pub fn new(image_of_r: Point, s: FQ) -> Self {
+        Signature { image_of_r, s }
     }
 
     pub fn to_string(&self) -> String {
-        format!("{} {} {}", &self.R.x().n(), &self.R.y().n(), &self.s.n())
+        format!(
+            "{} {} {}",
+            &self.image_of_r.x().n(),
+            &self.image_of_r.y().n(),
+            &self.s.n()
+        )
     }
 }
 
 pub struct SignedMessage {
-    A: Point,
+    public_key: Point,
     sig: Signature,
     msg: BigInt,
 }
 
 impl SignedMessage {
-    pub fn A(&self) -> &Point {
-        &self.A
+    pub fn public_key(&self) -> &Point {
+        &self.public_key
     }
     pub fn sig(&self) -> &Signature {
         &self.sig
@@ -78,15 +83,19 @@ impl SignedMessage {
         &self.msg
     }
 
-    pub fn new(A: Point, sig: Signature, msg: BigInt) -> Self {
-        SignedMessage { A, sig, msg }
+    pub fn new(public_key: Point, sig: Signature, msg: BigInt) -> Self {
+        SignedMessage {
+            public_key,
+            sig,
+            msg,
+        }
     }
 
     pub fn to_string(&self) -> String {
         format!(
             "{} {} {} {}",
-            self.A.x().n(),
-            self.A.y().n(),
+            self.public_key.x().n(),
+            self.public_key.y().n(),
             self.sig.to_string(),
             self.msg
         )
@@ -100,22 +109,22 @@ impl SignatureScheme {
         Point::generate()
     }
 
-    pub fn sign(private_key: BigInt, hash: BigInt) -> SignedMessage {
+    pub fn sign(private_key_scalar: BigInt, hash: BigInt) -> SignedMessage {
         let base_point = Self::base_point();
 
-        let A = &base_point * &private_key; // A = k * P -> Public key
+        let public_key = &base_point * &private_key_scalar; // A = k * P -> Public key
 
-        let M = hash.clone(); // prehash message
-        let r = Self::hash_secret(FQ::new(private_key.clone()), &M);
+        let message = hash.clone(); // prehash message
+        let r = Self::hash_secret(FQ::new(private_key_scalar.clone()), &message);
 
-        let R = &base_point * &r;
+        let image_of_r = &base_point * &r;
 
-        let t = Self::hash_public(&R, &A, M);
-        let S = (r + (private_key * t)) % JUBJUB_E.clone();
+        let t = Self::hash_public(&image_of_r, &public_key, message);
+        let signature = (r + (private_key_scalar * t)) % &*JUBJUB_E;
 
-        let signature_result = Signature::new(R, FQ::new(S));
+        let signature_result = Signature::new(image_of_r, FQ::new(signature));
 
-        let signed_message = SignedMessage::new(A, signature_result, hash);
+        let signed_message = SignedMessage::new(public_key, signature_result, hash);
 
         //let signature_result = Sig
         signed_message
@@ -146,11 +155,11 @@ impl SignatureScheme {
         hash % JUBJUB_L.clone()
     }
 
-    fn hash_public(R: &Point, A: &Point, M: BigInt) -> BigInt {
+    fn hash_public(image_of_r: &Point, public_key: &Point, message: BigInt) -> BigInt {
         let mut input: Vec<BigInt> = Vec::new();
-        input.extend(R.as_scalar());
-        input.extend(A.as_scalar());
-        input.extend(vec![M]);
+        input.extend(image_of_r.as_scalar());
+        input.extend(public_key.as_scalar());
+        input.extend(vec![message]);
 
         let poseidon = Poseidon::new(
             SNARK_SCALAR_FIELD.clone(),
@@ -185,8 +194,14 @@ pub fn generate_eddsa_signature(
 
     let signed_message = SignatureScheme::sign(private_key_big_int, hash);
 
-    let r_x_hex = format!("{:0>64}", signed_message.sig().R().x().n().to_str_radix(16));
-    let r_y_hex: String = format!("{:0>64}", signed_message.sig().R().y().n().to_str_radix(16));
+    let r_x_hex = format!(
+        "{:0>64}",
+        signed_message.sig().image_of_r().x().n().to_str_radix(16)
+    );
+    let r_y_hex: String = format!(
+        "{:0>64}",
+        signed_message.sig().image_of_r().y().n().to_str_radix(16)
+    );
     let s_hex: String = format!("{:0>64}", signed_message.sig().s().n().to_str_radix(16));
 
     format!("0x{}{}{}", r_x_hex, r_y_hex, s_hex)
@@ -218,7 +233,7 @@ mod tests {
 
     #[test]
     fn hash_public_test() {
-        let R = Point::new(
+        let image_of_r = Point::new(
             FQ::new(
                 BigInt::from_str(
                     "4991609103248925747358645194965349262579784734809679007552644294476920671344",
@@ -233,7 +248,7 @@ mod tests {
             ),
         );
 
-        let A = Point::new(
+        let public_key = Point::new(
             FQ::new(
                 BigInt::from_str(
                     "16540640123574156134436876038791482806971768689494387082833631921987005038935",
@@ -248,12 +263,12 @@ mod tests {
             ),
         );
 
-        let M = BigInt::from_str(
+        let message = BigInt::from_str(
             "20693456676802104653139582814194312788878632719314804297029697306071204881418",
         )
         .unwrap();
 
-        let result = SignatureScheme::hash_public(&R, &A, M);
+        let result = SignatureScheme::hash_public(&image_of_r, &public_key, message);
 
         assert_eq!(
             result,
@@ -291,14 +306,14 @@ mod tests {
         .unwrap();
         let signed = SignatureScheme::sign(key, msg);
         assert_eq!(
-            *signed.sig().R().x().n(),
+            *signed.sig().image_of_r().x().n(),
             BigInt::from_str(
                 "2114973053955517366033592592501464590076342821657201629830614924692550700766"
             )
             .unwrap()
         );
         assert_eq!(
-            *signed.sig().R().y().n(),
+            *signed.sig().image_of_r().y().n(),
             BigInt::from_str(
                 "6713953096854639492359183468711112854151280690992619923536842965423886430417"
             )
