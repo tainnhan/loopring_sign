@@ -55,7 +55,7 @@ This project is licensed under
 
 ## Acknowledgements
 
-Special thanks to [GitHubUsername](https://github.com/GitHubUsername) and. Their implementations in Go and C# have provided additional perspectives and have been a source of inspiration for `loopring_sign`. Check out their repositories for Go and C# implementations:
+Special thanks to leppaludi and fudgey. Their implementations in Go and C# have provided additional perspectives and have been a source of inspiration for `loopring_sign`. Check out their repositories for Go and C# implementations:
 
 - Go implementation: [go-loopring-sig](https://github.com/loopexchange-labs/go-loopring-sig)
 - C# implementation: [PoseidonSharp](https://github.com/fudgebucket27/PoseidonSharp/tree/master)
