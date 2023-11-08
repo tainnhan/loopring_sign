@@ -140,11 +140,11 @@ impl Poseidon {
     pub fn poseidon_constants(p: &BigInt, seed: &str, n: usize) -> Vec<BigInt> {
         let mut result: Vec<BigInt> = Vec::with_capacity(n);
         let mut current_seed: BigInt = Self::calculate_blake2b::<&str>(&seed);
-        result.push(current_seed.clone() % p);
+        result.push(&current_seed % p);
 
         for _ in 1..n {
             current_seed = Self::calculate_blake2b::<BigInt>(&current_seed);
-            result.push(current_seed.clone() % p);
+            result.push(&current_seed % p);
         }
         result
     }
