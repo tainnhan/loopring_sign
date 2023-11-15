@@ -16,7 +16,7 @@ Add this to your Cargo.toml
 
 ```rust
 [dependencies]
-loopring_sign = "0.1.2"
+loopring_sign = "0.1.4"
 ```
 
 ## Example 1: Generate EdDSA Signature
