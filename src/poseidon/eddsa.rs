@@ -100,6 +100,13 @@ impl SignedMessage {
             self.msg
         )
     }
+
+    pub fn to_hex(&self) -> String {
+        let r_x_hex = format!("{:0>64}", self.sig().image_of_r().x().n().to_str_radix(16));
+        let r_y_hex: String = format!("{:0>64}", self.sig().image_of_r().y().n().to_str_radix(16));
+        let s_hex: String = format!("{:0>64}", self.sig().s().n().to_str_radix(16));
+        format!("0x{}{}{}", r_x_hex, r_y_hex, s_hex)
+    }
 }
 pub struct SignatureScheme;
 
@@ -194,17 +201,33 @@ pub fn generate_eddsa_signature(
 
     let signed_message = SignatureScheme::sign(private_key_big_int, hash);
 
-    let r_x_hex = format!(
-        "{:0>64}",
-        signed_message.sig().image_of_r().x().n().to_str_radix(16)
-    );
-    let r_y_hex: String = format!(
-        "{:0>64}",
-        signed_message.sig().image_of_r().y().n().to_str_radix(16)
-    );
-    let s_hex: String = format!("{:0>64}", signed_message.sig().s().n().to_str_radix(16));
+    signed_message.to_hex()
+}
 
-    format!("0x{}{}{}", r_x_hex, r_y_hex, s_hex)
+pub fn get_eddsa_sig_with_poseidon(inputs: Vec<BigInt>, private_key: String) -> String {
+    let p = SNARK_SCALAR_FIELD.clone();
+    let poseidon = Poseidon::new(
+        p,
+        inputs.len() + 1,
+        6,
+        53,
+        "poseidon".to_string(),
+        BigInt::from(5),
+        None,
+        None,
+        128,
+    );
+
+    let hash = poseidon.calculate_poseidon(inputs).unwrap();
+
+    let private_key_big_int = match BigInt::from_str_radix(private_key.trim_start_matches("0x"), 16)
+    {
+        Ok(value) => value,
+        Err(_) => BigInt::zero(),
+    };
+
+    let result = SignatureScheme::sign(private_key_big_int, hash);
+    result.to_hex()
 }
 
 #[cfg(test)]
@@ -336,5 +359,13 @@ mod tests {
 
         let result = generate_eddsa_signature(request_type, url, data, l2_key);
         assert_eq!(result.as_str(), "0x15fdcda3ca2965d2ae43739cc6740e50c08d3f756c6161bcedb10fbc05290e000f3bc31e2293ba91ca7ac55cd20a86ae3541d3dfed63896cd474015ec60b8d40274f98b2d0a87ebf8cd0ee16dc9ec953a229cf0d6b2b61867ca80ba6e8ae1ed3");
+    }
+    #[test]
+    fn generate_eddsa_sig_with_poseidon() {
+        let l2_key = "0x087d254d02a857d215c4c14d72521f8ab6a81ec8f0107eaf16093ebb7c70dc50";
+        let inputs = vec![BigInt::from(2), BigInt::from(5), BigInt::from(7)];
+        let result = get_eddsa_sig_with_poseidon(inputs, l2_key.to_string());
+
+        assert_eq!(result, "0x0659e9406f7c3a0e1bd6ec42e69ca4a013e21253ff8abd216d9411b882b263502d99f4229cf3f10991e7999bf45b55f4afa9976e237df94378fd647fdb5a5eec0f944d06f57d08b23f3327334c43198a9c78d477a3f0f3e30f0c2c464f5319be".to_string());
     }
 }
